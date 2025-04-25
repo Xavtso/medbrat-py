@@ -1,0 +1,112 @@
+{
+  "allergy": {
+    "recommendations": "Avoid allergens and ventilate the room regularly.",
+    "self_care": "Take antihistamines if needed and rinse your nose with saline solution.",
+    "reasonForDoctorVisit": "If you experience severe swelling, widespread rash, or difficulty breathing."
+  },
+  "arthritis": {
+    "recommendations": "Reduce stress on the joints and perform light exercises.",
+    "self_care": "Use anti-inflammatory creams, apply warm compresses, and take painkillers as directed.",
+    "reasonForDoctorVisit": "If pain and swelling persist for several days or worsen."
+  },
+  "bronchial asthma": {
+    "recommendations": "Avoid triggers and keep your inhaler handy.",
+    "self_care": "Practice breathing control and perform gentle breathing exercises.",
+    "reasonForDoctorVisit": "If attacks become more frequent or your inhaler is not effective."
+  },
+  "cervical spondylosis": {
+    "recommendations": "Avoid sudden neck movements and do specialized neck exercises.",
+    "self_care": "Massage the neck area and apply warm compresses.",
+    "reasonForDoctorVisit": "If pain worsens or you develop arm numbness or dizziness."
+  },
+  "chicken pox": {
+    "recommendations": "Stay in bed rest and treat marks gently.",
+    "self_care": "Take antihistamines to reduce itching and apply antiseptics.",
+    "reasonForDoctorVisit": "If complications arise, fever is high, or lesions become infected."
+  },
+  "common cold": {
+    "recommendations": "Rest, drink plenty of warm fluids, and stay warm.",
+    "self_care": "Use fever reducers like paracetamol and nasal decongestant drops.",
+    "reasonForDoctorVisit": "If fever lasts more than 3 days or symptoms worsen."
+  },
+  "dengue": {
+    "recommendations": "Stay hydrated and avoid dehydration.",
+    "self_care": "Take fever reducers (avoid aspirin) and rest.",
+    "reasonForDoctorVisit": "If you experience severe abdominal pain, bleeding, or rapid deterioration."
+  },
+  "diabetes": {
+    "recommendations": "Monitor blood sugar levels and follow a low-carb diet.",
+    "self_care": "Stay active regularly and consider glucose-lowering medications.",
+    "reasonForDoctorVisit": "If blood sugar is uncontrolled or you develop dizziness or vomiting."
+  },
+  "drug reaction": {
+    "recommendations": "Stop the suspected medication immediately.",
+    "self_care": "For mild symptoms, observe and take antihistamines.",
+    "reasonForDoctorVisit": "If you develop severe swelling, respiratory difficulty, or widespread rash."
+  },
+  "fungal infection": {
+    "recommendations": "Keep affected areas dry and avoid skin injury.",
+    "self_care": "Apply antifungal creams or ointments such as clotrimazole.",
+    "reasonForDoctorVisit": "If infection spreads or does not respond to topical treatment."
+  },
+  "gastroesophageal reflux disease": {
+    "recommendations": "Avoid eating before bedtime and reduce spicy/fatty foods.",
+    "self_care": "Use antacids or proton-pump inhibitors like omeprazole.",
+    "reasonForDoctorVisit": "If you have frequent heartburn or persistent chest pain."
+  },
+  "hypertension": {
+    "recommendations": "Monitor your blood pressure, limit salt and caffeine intake.",
+    "self_care": "Practice relaxation exercises and drink calming herbal teas.",
+    "reasonForDoctorVisit": "If your blood pressure spikes suddenly or you get severe headaches or vision changes."
+  },
+  "impetigo": {
+    "recommendations": "Disinfect lesions and maintain strict hygiene.",
+    "self_care": "Apply antiseptic ointments and avoid scratching.",
+    "reasonForDoctorVisit": "If the rash spreads or you develop fever."
+  },
+  "jaundice": {
+    "recommendations": "Monitor liver function and avoid fatty foods.",
+    "self_care": "Drink plenty of water and follow a light diet.",
+    "reasonForDoctorVisit": "Urgently, for a full workup to identify the underlying cause."
+  },
+  "malaria": {
+    "recommendations": "Seek immediate medical attention; this can be life-threatening.",
+    "self_care": "Limited — specific antimalarial drugs are required.",
+    "reasonForDoctorVisit": "Immediately — malaria requires prompt, specific treatment."
+  },
+  "migraine": {
+    "recommendations": "Rest in a dark, quiet room and avoid stress.",
+    "self_care": "Take painkillers such as ibuprofen or paracetamol as needed.",
+    "reasonForDoctorVisit": "If headache lasts more than 3 days or is accompanied by nausea or vision problems."
+  },
+  "peptic ulcer disease": {
+    "recommendations": "Avoid spicy foods, coffee, and alcohol.",
+    "self_care": "Use antacids or PPIs like omeprazole to relieve pain.",
+    "reasonForDoctorVisit": "If you experience severe pain, vomiting blood, or unexplained weight loss."
+  },
+  "pneumonia": {
+    "recommendations": "Seek medical evaluation — antibiotics may be necessary.",
+    "self_care": "Bed rest and plenty of fluids; self-treatment can be dangerous.",
+    "reasonForDoctorVisit": "Immediately, to prevent complications."
+  },
+  "psoriasis": {
+    "recommendations": "Keep your skin moisturized and avoid irritants.",
+    "self_care": "Use topical corticosteroids or soothing baths.",
+    "reasonForDoctorVisit": "If lesions cover a large area or flare-ups worsen."
+  },
+  "typhoid": {
+    "recommendations": "Follow a light diet and stay hydrated.",
+    "self_care": "Use only fever reducers; antibiotics are required for treatment.",
+    "reasonForDoctorVisit": "Immediately — typhoid is dangerous without antibiotic therapy."
+  },
+  "urinary tract infection": {
+    "recommendations": "Drink plenty of fluids and don’t hold in urine.",
+    "self_care": "Cranberry juice and warm sitz baths may help.",
+    "reasonForDoctorVisit": "If pain increases or you notice blood in the urine."
+  },
+  "varicose veins": {
+    "recommendations": "Avoid prolonged standing and wear compression stockings.",
+    "self_care": "Massage and contrast baths for the legs.",
+    "reasonForDoctorVisit": "If you experience severe swelling, pain, or the appearance of ulcers on the skin."
+  }
+}

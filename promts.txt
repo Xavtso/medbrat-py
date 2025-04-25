@@ -1,0 +1,66 @@
+allergy
+“I have itchy, watery eyes and sneezing every time I go outside near flowers or trees.”
+
+arthritis
+“My knee and wrist joints are swollen, stiff in the morning, and the pain improves slightly with movement.”
+
+bronchial asthma
+“I experience wheezing, chest tightness and shortness of breath triggered by cold air or exercise.”
+
+cervical spondylosis
+“I feel chronic neck pain and stiffness, with occasional numbness in my arms when I turn my head.”
+
+chicken pox
+“I have red itchy spots all over my body that turned into fluid-filled blisters over the last two days.”
+
+common cold
+“I’ve had a runny nose, sore throat, mild cough and low-grade fever for the past 2 days.”
+
+dengue
+“I suddenly developed high fever, severe muscle and joint pain, and a rash after returning from a tropical trip.”
+
+diabetes
+“I feel excessively thirsty, urinate very frequently, and have unexplained weight loss over the past month.”
+
+drug reaction
+“After starting a new antibiotic, I developed hives, itching and a mild facial swelling within hours.”
+
+fungal infection
+“I have red, scaly patches between my toes that are itchy and sometimes crack and peel.”
+
+gastroesophageal reflux disease
+“I regularly get heartburn and a sour taste in my mouth after meals, especially when lying down.”
+
+hypertension
+“My blood pressure readings are consistently above 160/100, and I occasionally have headaches and dizziness.”
+
+impetigo
+“I noticed small red sores around my nose and mouth that burst and form a yellowish crust.”
+
+jaundice
+“My skin and the whites of my eyes turned yellow, and I feel tired with dark urine.”
+
+malaria
+“I have cyclical high fevers every 48 hours, chills, headache and sweating after returning from a malaria-endemic area.”
+
+migraine
+“I suffer from intense one-sided throbbing headache with nausea, sensitivity to light and sound.”
+
+peptic ulcer disease
+“I am getting burning stomach pain two hours after eating, often relieved by antacids.”
+
+pneumonia
+“I have high fever, a productive cough with greenish sputum, and sharp chest pain when I breathe in.”
+
+psoriasis
+“I have well-defined red plaques with silvery scales on my elbows and knees that itch moderately.”
+
+typhoid
+“I developed sustained high fever, abdominal pain, headache and a faint rash of rose spots on my trunk.”
+
+urinary tract infection
+“I experience burning pain when urinating, frequent urges to void small amounts, and cloudy urine.”
+
+varicose veins
+“I feel aching heaviness in my legs, and see twisted, bulging blue veins on the back of my calves.”
+

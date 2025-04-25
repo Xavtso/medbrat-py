@@ -1,284 +1,179 @@
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
-import os
+import re
+import json
 
-from transformers import (
-    TFAutoModelForSequenceClassification,
-    AutoTokenizer
-)
+# 1) TensorFlow-BERT classifier
+from transformers import TFAutoModelForSequenceClassification, AutoTokenizer as BFTokenizer
 import tensorflow as tf
-from googletrans import Translator
+
+# 2) T5 + LoRA-adapter via PEFT for generation
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer as T5Tokenizer
+from peft import PeftModel
 
 class SymptomRequest(BaseModel):
     symptoms: str
 
-app = FastAPI()
+app = FastAPI(
+    title="Symptom→Diagnosis+Treatment (EN only)",
+    version="1.0",
+    description="Classify symptoms into 22 diagnoses and generate treatment recommendations in English."
+)
 
-# Глобальні змінні
-classifier_model = None
-classifier_tokenizer = None
-translator = Translator()
-
-# BERT: індекс -> діагноз (англ.)
+# ─── 1) BERT classifier setup ────────────────────────────────────────
+BF_MODEL_DIR = os.path.join(os.path.dirname(__file__), "model") 
 id2label = {
-    0: "allergy",
-    1: "arthritis",
-    2: "bronchial asthma",
-    3: "cervical spondylosis",
-    4: "chicken pox",
-    5: "common cold",
-    6: "dengue",
-    7: "diabetes",
-    8: "drug reaction",
-    9: "fungal infection",
-    10: "gastroesophageal reflux disease",
-    11: "hypertension",
-    12: "impetigo",
-    13: "jaundice",
-    14: "malaria",
-    15: "migraine",
-    16: "peptic ulcer disease",
-    17: "pneumonia",
-    18: "psoriasis",
-    19: "typhoid",
-    20: "urinary tract infection",
-    21: "varicose veins"
+    0: "allergy", 1: "arthritis", 2: "bronchial asthma", 3: "cervical spondylosis",
+    4: "chicken pox", 5: "common cold", 6: "dengue", 7: "diabetes",
+    8: "drug reaction", 9: "fungal infection", 10: "gastroesophageal reflux disease",
+    11: "hypertension", 12: "impetigo", 13: "jaundice", 14: "malaria",
+    15: "migraine", 16: "peptic ulcer disease", 17: "pneumonia",
+    18: "psoriasis", 19: "typhoid", 20: "urinary tract infection", 21: "varicose veins"
 }
 
-# Англ -> Укр для діагнозу (BERT виводить англомовне label)
-EN_TO_UA = {
-    "allergy": "Алергія",
-    "arthritis": "Артрит",
-    "bronchial asthma": "Бронхіальна астма",
-    "cervical spondylosis": "Шийний спондильоз",
-    "chicken pox": "Вітряна віспа",
-    "common cold": "Застуда",
-    "dengue": "Денге",
-    "diabetes": "Діабет",
-    "drug reaction": "Реакція на ліки",
-    "fungal infection": "Грибкова інфекція",
-    "gastroesophageal reflux disease": "Рефлюксна хвороба стравоходу",
-    "hypertension": "Гіпертонія",
-    "impetigo": "Імпетиго",
-    "jaundice": "Жовтяниця",
-    "malaria": "Малярія",
-    "migraine": "Мігрень",
-    "peptic ulcer disease": "Виразка шлунку/дванадцятипалої кишки",
-    "pneumonia": "Пневмонія",
-    "psoriasis": "Псоріаз",
-    "typhoid": "Тиф",
-    "urinary tract infection": "Інфекція сечовивідних шляхів",
-    "varicose veins": "Варикозне розширення вен"
+bf_tokenizer = BFTokenizer.from_pretrained(BF_MODEL_DIR)
+bf_model     = TFAutoModelForSequenceClassification.from_pretrained(BF_MODEL_DIR)
+
+
+# ─── 2) T5 + LoRA via PEFT setup ─────────────────────────────────────
+ADAPTER_DIR = os.path.join(os.path.dirname(__file__), "T5-medical_Symptom-Diagnoses")
+BASE_T5     = "t5-small"
+
+t5_tokenizer = T5Tokenizer.from_pretrained(BASE_T5)
+base_t5      = AutoModelForSeq2SeqLM.from_pretrained(BASE_T5)
+rec_model    = PeftModel.from_pretrained(base_t5, ADAPTER_DIR)
+
+
+def classify_symptoms(text: str):
+    """Returns (diagnosis_label, confidence) from BERT."""
+    inputs = bf_tokenizer(text, return_tensors="tf", truncation=True, max_length=128)
+    logits = bf_model(**inputs).logits
+    idx    = int(tf.math.argmax(logits, axis=-1)[0])
+    conf   = float(tf.nn.softmax(logits, axis=-1)[0, idx].numpy())
+    return id2label[idx], conf
+
+
+
+
+
+import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+DRUG_FALLBACK = {
+    "allergy":      ["Cetirizine", "Loratadine", "Fexofenadine"],
+    "arthritis":    ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "bronchial asthma": ["Albuterol", "Salmeterol", "Metformin"],
+    "cervical spondylosis": ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "chicken pox":  ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "common cold":  ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "dengue":       ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "diabetes":     ["Metformin", "Glipizide", "Repaglinide"],
+    "drug reaction": ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "fungal infection": ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "gastroesophageal reflux disease": ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "hypertension": ["Metformin", "Glipizide", "Repaglinide"],
+    "impetigo":     ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "jaundice":     ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "malaria":      ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "migraine":     ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "peptic ulcer disease": ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "pneumonia":    ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "psoriasis":    ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "typhoid":      ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "urinary tract infection": ["Ibuprofen", "Naproxen", "Diclofenac"],
+    "varicose veins": ["Ibuprofen", "Naproxen", "Diclofenac"],
 }
 
-# Повний набір українських рекомендацій
-HARD_CODED_RECOMMENDATIONS = {
-    "allergy": (
-        "При даних симптомах найімовірніше, що у вас: Алергія.\n"
-        "РЕКОМЕНДАЦІЯ: Уникайте алергенів, провітрюйте приміщення.\n"
-        "САМОЛІКУВАННЯ: Антигістамінні (за потреби), промивання носа сольовим розчином.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: При сильних набряках, висипах або ускладненому диханні."
-    ),
-    "arthritis": (
-        "При даних симптомах найімовірніше, що у вас: Артрит.\n"
-        "РЕКОМЕНДАЦІЯ: Зменшити навантаження на суглоби, робити легку гімнастику.\n"
-        "САМОЛІКУВАННЯ: Протизапальні мазі, теплові компреси, знеболювальні за інструкцією.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо біль і набряк не минають кілька днів чи погіршуються."
-    ),
-    "bronchial asthma": (
-        "При даних симптомах найімовірніше, що у вас: Бронхіальна астма.\n"
-        "РЕКОМЕНДАЦІЯ: Уникайте алергенів, тримайте при собі інгалятор.\n"
-        "САМОЛІКУВАННЯ: Контроль дихання, легкі дихальні вправи.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: При погіршенні, частих нападах або недостатній ефективності інгалятора."
-    ),
-    "cervical spondylosis": (
-        "При даних симптомах найімовірніше, що у вас: Шийний спондильоз.\n"
-        "РЕКОМЕНДАЦІЯ: Уникайте різких рухів шиї, робіть спеціальну гімнастику.\n"
-        "САМОЛІКУВАННЯ: Масаж шийного відділу, теплові компреси.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо біль посилюється, з’являється оніміння рук чи запаморочення."
-    ),
-    "chicken pox": (
-        "При даних симптомах найімовірніше, що у вас: Вітряна віспа.\n"
-        "РЕКОМЕНДАЦІЯ: Дотримуватися постільного режиму, обробляти висипи.\n"
-        "САМОЛІКУВАННЯ: Антигістамінні (проти свербежу), зеленка або інші антисептики на висип.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: При ускладненнях, високій температурі, поширених інфікованих висипах."
-    ),
-    "common cold": (
-        "При даних симптомах найімовірніше, що у вас: Застуда.\n"
-        "РЕКОМЕНДАЦІЯ: Відпочивайте, пийте багато теплої рідини (чай, вода). Уникайте переохолодження.\n"
-        "САМОЛІКУВАННЯ: За потреби приймати жарознижувальні (парацетамол) та краплі від нежитю.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо температура утримується понад 3 дні або стан погіршується."
-    ),
-    "dengue": (
-        "При даних симптомах найімовірніше, що у вас: Денге.\n"
-        "РЕКОМЕНДАЦІЯ: Пийте багато рідини, уникайте зневоднення.\n"
-        "САМОЛІКУВАННЯ: Жарознижувальні (уникайте аспірину), відпочинок.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: При сильному болю у животі, кривавих виділеннях або різкому погіршенні стану."
-    ),
-    "diabetes": (
-        "При даних симптомах найімовірніше, що у вас: Діабет.\n"
-        "РЕКОМЕНДАЦІЯ: Перевірка рівня цукру, дотримання дієти з мінімумом швидких вуглеводів.\n"
-        "САМОЛІКУВАННЯ: Регулярна активність, контроль вуглеводів, можливо цукрознижувальні препарати.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо рівень цукру неконтрольовано високий, з’являється запаморочення чи блювання."
-    ),
-    "drug reaction": (
-        "При даних симптомах найімовірніше, що у вас: Реакція на ліки.\n"
-        "РЕКОМЕНДАЦІЯ: Припинити прийом підозрюваних препаратів.\n"
-        "САМОЛІКУВАННЯ: Якщо незначні симптоми — спостерігайте, використовуйте антигістамінні.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Негайно при сильних набряках, ускладненому диханні чи висипах."
-    ),
-    "fungal infection": (
-        "При даних симптомах найімовірніше, що у вас: Грибкова інфекція.\n"
-        "РЕКОМЕНДАЦІЯ: Тримайте уражені ділянки сухими, уникайте травмування шкіри.\n"
-        "САМОЛІКУВАННЯ: Протигрибкові мазі або креми (клотримазол, тощо).\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо інфекція поширюється чи не реагує на місцеве лікування."
-    ),
-    "gastroesophageal reflux disease": (
-        "При даних симптомах найімовірніше, що у вас: Рефлюксна хвороба стравоходу.\n"
-        "РЕКОМЕНДАЦІЯ: Уникайте їжі перед сном, зменште гостре та жирне.\n"
-        "САМОЛІКУВАННЯ: Антациди, ІПП (омепразол) за призначенням.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо відчуваєте часту печію або біль у грудях, що не минає."
-    ),
-    "hypertension": (
-        "При даних симптомах найімовірніше, що у вас: Гіпертонія.\n"
-        "РЕКОМЕНДАЦІЯ: Контролюйте тиск, обмежте сіль та каву.\n"
-        "САМОЛІКУВАННЯ: Релаксаційні вправи, трав'яні чаї, заспокійливе.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: При різкому підвищенні тиску, сильному головному болю чи порушеннях зору."
-    ),
-    "impetigo": (
-        "При даних симптомах найімовірніше, що у вас: Імпетиго.\n"
-        "РЕКОМЕНДАЦІЯ: Дезінфікуйте уражені ділянки, дотримуйтесь гігієни.\n"
-        "САМОЛІКУВАННЯ: Антисептичні мазі, захист від розчухування.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо висип розширюється чи супроводжується лихоманкою."
-    ),
-    "jaundice": (
-        "При даних симптомах найімовірніше, що у вас: Жовтяниця.\n"
-        "РЕКОМЕНДАЦІЯ: Контролюйте функцію печінки, уникайте жирного.\n"
-        "САМОЛІКУВАННЯ: Пийте багато води, легка дієта.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Терміново, оскільки потрібне обстеження для встановлення причини."
-    ),
-    "malaria": (
-        "При даних симптомах найімовірніше, що у вас: Малярія.\n"
-        "РЕКОМЕНДАЦІЯ: Терміново зверніться до лікаря, адже це може бути небезпечно.\n"
-        "САМОЛІКУВАННЯ: Обмежене, оскільки потрібні протималярійні засоби.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Негайно, адже малярія вимагає специфічного лікування."
-    ),
-    "migraine": (
-        "При даних симптомах найімовірніше, що у вас: Мігрень.\n"
-        "РЕКОМЕНДАЦІЯ: Перебувайте у темному тихому приміщенні, уникайте стресу.\n"
-        "САМОЛІКУВАННЯ: Знеболювальні (ібупрофен, парацетамол) за потреби.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо біль триває понад 3 дні, супроводжується нудотою чи порушенням зору."
-    ),
-    "peptic ulcer disease": (
-        "При даних симптомах найімовірніше, що у вас: Виразкова хвороба.\n"
-        "РЕКОМЕНДАЦІЯ: Уникайте гострого, кави та алкоголю.\n"
-        "САМОЛІКУВАННЯ: Антациди або ІПП (омепразол) можуть полегшити.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: При різких болях, блюванні з кров’ю чи різкому схудненні."
-    ),
-    "pneumonia": (
-        "При даних симптомах найімовірніше, що у вас: Пневмонія.\n"
-        "РЕКОМЕНДАЦІЯ: Негайно зверніться до лікаря для обстеження, можливе застосування антибіотиків.\n"
-        "САМОЛІКУВАННЯ: Постільний режим, багато рідини. Самолікування небезпечне.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Відразу, щоб уникнути ускладнень."
-    ),
-    "psoriasis": (
-        "При даних симптомах найімовірніше, що у вас: Псоріаз.\n"
-        "РЕКОМЕНДАЦІЯ: Зволожуйте шкіру, уникайте подразників.\n"
-        "САМОЛІКУВАННЯ: Місцеві мазі (кортикостероїди), легкі заспокійливі ванни.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: При розширених ураженнях чи загостренні."
-    ),
-    "typhoid": (
-        "При даних симптомах найімовірніше, що у вас: Тиф.\n"
-        "РЕКОМЕНДАЦІЯ: Пити багато води, дотримуватися дієти (легкозасвоювані страви).\n"
-        "САМОЛІКУВАННЯ: Лише жарознижувальні, але потрібне обстеження.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Негайно, оскільки тиф небезпечний без антибіотиків."
-    ),
-    "urinary tract infection": (
-        "При даних симптомах найімовірніше, що у вас: Інфекція сечовивідних шляхів.\n"
-        "РЕКОМЕНДАЦІЯ: Пити багато рідини, не терпіти позивів до сечовипускання.\n"
-        "САМОЛІКУВАННЯ: Журавлиний сік, теплі ванночки. Можливі легкі препарати.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: Якщо біль або печіння посилюються, з’являється кров у сечі."
-    ),
-    "varicose veins": (
-        "При даних симптомах найімовірніше, що у вас: Варикозне розширення вен.\n"
-        "РЕКОМЕНДАЦІЯ: Уникайте довготривалого стояння, носіть компресійні панчохи.\n"
-        "САМОЛІКУВАННЯ: Масаж, контрастні ванночки для ніг.\n"
-        "КОЛИ ЗВЕРТАТИСЯ ДО ЛІКАРЯ: При сильному набряку, болю чи появі виразок на шкірі."
+def generate_drug_list(symptoms: str, diagnosis: str) -> str:
+    prompt = (
+        "You are a medical assistant.\n"
+        f"Confirmed diagnosis: {diagnosis}.\n"
+        "List exactly three generic drug names, separated by commas, with NO other text.\n"
+        f"Patient symptoms: {symptoms}\n"
+        "Drugs:"
     )
-}
+    tok = t5_tokenizer(
+        prompt,
+        return_tensors="pt",
+        truncation=True,
+        padding="longest",
+        max_length=256
+    )
+    outputs = rec_model.generate(
+        input_ids=tok.input_ids,
+        attention_mask=tok.attention_mask,
+        max_length=tok.input_ids.shape[-1] + 20,
+        num_beams=3,
+        do_sample=False,
+        early_stopping=True
+    )
+
+    raw = t5_tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+    logger.info(f"[generate_drug_list] raw: {raw!r}")
+
+    # Витягуємо текст після останнього "Drugs:"
+    match = re.search(r"[Dd]rugs\s*:\s*(.*)", raw)
+    raw_list = match.group(1) if match else raw
+
+    # Сплітимо за комами, очистимо крапки
+    candidates = [re.sub(r"[.]*$", "", s.strip()) for s in raw_list.split(",")]
+
+    # Видалимо небажані елементи та дублікати
+    seen = set()
+    drugs = []
+    for item in candidates:
+        if not item or item.lower().startswith("diagnosis"):
+            continue
+        if item not in seen:
+            seen.add(item)
+            drugs.append(item)
+        if len(drugs) == 3:
+            break
+
+    logger.info(f"[generate_drug_list] parsed drugs: {drugs}")
+
+    # Фолбек лише якщо парсинг НЕ дав жодної назви
+    if len(drugs) == 0:
+        logger.warning(f"[generate_drug_list] no drugs parsed, using fallback for {diagnosis}")
+        drugs = DRUG_FALLBACK.get(diagnosis, [])[:3]
+
+    # Повертаємо через кому (може бути 1–3 елементи)
+    return ", ".join(drugs)
 
 
-@app.on_event("startup")
-def load_models():
-    global classifier_model
-    global classifier_tokenizer
 
-    # Завантажуємо BERT для класифікації (TensorFlow)
-    model_path_class = os.path.join(os.path.dirname(__file__), "model")
-    print(">> [INFO] Loading BERT classifier...")
-    classifier_tokenizer = AutoTokenizer.from_pretrained(model_path_class)
-    classifier_model = TFAutoModelForSequenceClassification.from_pretrained(model_path_class)
-    print(">> [INFO] BERT loaded.\n")
 
+with open("recommendations_structured.json", encoding="utf-8") as f:
+    STRUCTURED_RECS = json.load(f)
 
 @app.post("/predict")
-def predict(data: SymptomRequest):
-    """
-    1) Визначаємо мову користувача (uk/en/...).
-    2) Якщо uk -> перекладаємо symptoms -> en для класифікації.
-    3) Класифікуємо (BERT) -> отримуємо en_diagnosis.
-    4) Дістаємо захардкожений текст (український) із HARD_CODED_RECOMMENDATIONS.
-    5) Якщо користувач укр -> повертаємо напряму. Якщо інша мова -> перекладаємо.
-    """
-    user_text = data.symptoms.strip()
+def assist(req: SymptomRequest):
+    symptoms = req.symptoms.strip()
+    if not symptoms:
+        raise HTTPException(400, "Please provide symptoms in English.")
 
-    # Крок 1. Виявляємо мову
-    detection = translator.detect(user_text)
-    user_lang = detection.lang  # 'uk', 'en', etc.
+    # 1) classify
+    diag_en, conf = classify_symptoms(symptoms)
 
-    # Крок 2. Якщо укр, перекладаємо -> en
-    if user_lang == 'uk':
-        text_for_classification = translator.translate(user_text, src='uk', dest='en').text
-    else:
-        text_for_classification = user_text
+    # 2) get drug list only
+    drugs = generate_drug_list(symptoms, diag_en)
 
-    # Крок 3. Класифікація (англійською) через BERT
-    inputs = classifier_tokenizer(
-        text_for_classification,
-        return_tensors="tf",
-        truncation=True,
-        max_length=128
-    )
-    outputs = classifier_model(**inputs)
-    logits = outputs.logits
-    predicted_class_id = int(tf.math.argmax(logits, axis=-1)[0])
-    en_diagnosis = id2label.get(predicted_class_id, "Unknown")
+    # 2) recommendations — зі STRUCTURED_RECS
+    rec_block = STRUCTURED_RECS.get(diag_en, {})
 
-    # Крок 4. Дістаємо український текст рекомендації із словника
-    uk_advice = HARD_CODED_RECOMMENDATIONS.get(en_diagnosis, (
-        "Немає готових рекомендацій для цього діагнозу. "
-        "Радимо звернутися до лікаря."
-    ))
+    return {
+        "diagnosis":                   diag_en,
+        "confidence":                  round(conf, 3),
+        "drugs":                       drugs,
+        "recommendations":             rec_block.get("recommendations", ""),
+        "self_care":                   rec_block.get("self_care", ""),
+        "reason_for_doctor_visit":     rec_block.get("reasonForDoctorVisit", "")
+    }
 
-    # Крок 5. Якщо користувач писав укр — повертаємо напряму, інакше перекладаємо
-    if user_lang == 'uk':
-        return {
-            "language_detected": "uk",
-            "diagnosis_en": en_diagnosis,
-            "advice_uk": uk_advice,
-            "message": uk_advice
-        }
-    else:
-        # Перекладаємо укр-текст на мову користувача (user_lang)
-        advice_translated = translator.translate(uk_advice, src='uk', dest=user_lang).text
-        return {
-            "language_detected": user_lang,
-            "diagnosis_en": en_diagnosis,
-            "advice_uk": uk_advice,
-            "advice_in_user_lang": advice_translated,
-            "message": advice_translated
-        }
 
 
 if __name__ == "__main__":
